@@ -6,11 +6,6 @@ const User=require("./models/User")
 const validator=require("validator")
 const bcrypt=require("bcrypt")
 const fs=require("fs")
-const { match } = require("assert")
-const jwt = require("jsonwebtoken")
-require("dotenv").config()
-
-const port = process.env.TOKEN_SERVER_PORT
 multer = require("multer")
 require('dotenv').config();
 const saltRounds=10
@@ -47,9 +42,10 @@ async function PostNewUser(req, res) {
             username: req.body.following,
         };
         user.following.push(following);
-        user.save().catch((err) => res.send(err));
-    
-        if (res.statusCode === 200)
+        User.findOne({ $or:[{username: req.body.username},{email: req.body.email}]}, function (err, list) {
+            if (list===null){
+                user.save().catch((err) => res.send(err));
+                if (res.statusCode === 200)
                 {
                     res.send("Success send!");
                 }
@@ -57,31 +53,14 @@ async function PostNewUser(req, res) {
                 {
                     res.send("Something wrong?");
                 }
+            }
+            else
+            {
+                res.status(401).send("User name or email already exist");
+            }
+        });
     } catch (err) {
         console.error(`Error while posting new user:`, err.message);
-    }
-}
-
-//login with username and password (generates access token)
-function PostLogin(req, res) {
-    try {
-        User.findOne({username: req.body.username},async (err,list)=>{
-            if (list == null) res.status(404).send("User does not exist")
-            const match = bcrypt.compare(req.body.password, list.password)
-            if (await bcrypt.compare(req.body.password, list.password))
-            {
-                const accessToken = generateAccessToken ({user: req.body.name})
-                const refreshToken = generateRefreshToken ({user: req.body.name})
-                res.json ({accessToken: accessToken, refreshToken: refreshToken})
-
-            }
-            else{
-                res.status(401).send("Password Incorrect")
-            }
-        }
-        )
-    } catch (err) {
-        console.error(`Error while sending login request:`, err.message);
     }
 }
 
@@ -244,44 +223,14 @@ async function GetUserPicture(req, res) {
         console.error(`Error while getting user picture:`, err.message);
     }
 }
-function generateAccessToken(user) {
-    return jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {expiresIn: "15m"}) 
-    }
-    // refreshTokens
-    let refreshTokens = []
-    function generateRefreshToken(user) {
-    const refreshToken = jwt.sign(user, process.env.REFRESH_TOKEN_SECRET, {expiresIn: "20m"})
-    refreshTokens.push(refreshToken)
-    return refreshToken
-    }
-    
 
-function RefreshToken(req,res) {
-    if (!refreshTokens.includes(req.body.token)) res.status(400).send("Refresh Token Invalid")
-    refreshTokens = refreshTokens.filter( (c) => c != req.body.token)
-    //remove the old refreshToken from the refreshTokens list
-    const accessToken = generateAccessToken ({user: req.body.username})
-    const refreshToken = generateRefreshToken ({user: req.body.username})
-    //generate new accessToken and refreshTokens
-    res.json ({accessToken: accessToken, refreshToken: refreshToken})
-
-}
-
-function Logout(req,res) {
-    refreshTokens = refreshTokens.filter ( (c) => c!= req.body.token)
-
-    res.status(204).send("Logged out")
-}
 module.exports = {
     PostNewUser,
-    PostLogin,
     FindAllUser,
     FindUsername,
     FindUser,
     DeleteUserID,
     UpdateUser,
     UploadUserPicture,
-    GetUserPicture,
-    RefreshToken,
-    Logout
+    GetUserPicture
 }
